@@ -18,8 +18,8 @@
     table button{white-space:nowrap}
     table input[type=number]{text-align:right}
     td.num{text-align:right;white-space:nowrap}
-    #ingredientTable td,#ingredientTable th,#apiResults td,#apiResults th{padding:7px 8px}
-    #ingredientTable tr:hover,#apiResults tr:hover{background:#faf6ef}
+    #bomTable td,#bomTable th,#apiResults td,#apiResults th{padding:7px 8px}
+    #bomTable tr:hover,#apiResults tr:hover{background:#faf6ef}
     #apiResults{overflow:auto}
     .btn-sm{padding:7px 11px;font-size:13px}
     button.danger{background:#fff;color:#b54b43;border:1px solid #ecc7c3}
@@ -27,8 +27,8 @@
     .cell-food{min-width:220px;white-space:normal}
     .cell-food .food-base{font-weight:700}
     .cell-food .food-sub{font-size:11px;color:var(--muted);margin-top:2px}
-    #ingredientTable td.src{min-width:200px}
-    #ingredientTable td.src input{text-overflow:ellipsis}
+    #bomTable td.src{min-width:200px}
+    #bomTable td.src input{text-overflow:ellipsis}
     .saved-item{display:inline-flex;align-items:center;gap:2px}
     .saved-del{background:#efe7dc;color:#9b5f2f;border:0;border-radius:8px;padding:8px 10px;font-weight:800;line-height:1;cursor:pointer}
     .saved-del:hover{background:#e3d8c8}
@@ -71,21 +71,15 @@
   </div>
 
   <section class="card full">
-    <h2>3. 원료 마스터</h2>
-    <div class="small" style="margin:0 0 10px">여기는 원료별 영양성분(100g당) DB입니다. 실제 제품 영양성분은 ④ 배합비에서 원료와 비율(%)을 입력하고 [계산하기]를 누르면 하단 결과 영역에 산출됩니다.</div>
-    <div class="buttons"><button onclick="addIngredientManual()">직접 원료 추가</button><button class="secondary" onclick="saveLocal()">로컬 저장</button><button class="secondary" onclick="loadLocal()">불러오기</button></div>
-    <div style="overflow:auto;margin-top:12px"><table id="ingredientTable"></table></div>
+    <h2>3. 원재료(BOM)</h2>
+    <div class="small" style="margin:0 0 10px">원료와 배합비%를 넣으면(합계 100%) 아래 결과가 자동 산출됩니다.</div>
+    <div class="buttons"><button onclick="addBomRow()">원료 추가</button><button class="green" onclick="calculate()">계산하기</button><button class="secondary" onclick="saveLocal()">로컬 저장</button><button class="secondary" onclick="loadLocal()">불러오기</button></div>
+    <div style="overflow:auto;margin-top:12px"><table id="bomTable"></table></div>
+    <div id="bomSum" style="margin-top:10px"></div>
   </section>
 
   <section class="card full">
-    <h2>4. 배합비</h2>
-    <div class="buttons"><button onclick="addRecipeRow()">배합 원료 추가</button><button class="green" onclick="calculate()">계산하기</button></div>
-    <div style="overflow:auto;margin-top:12px"><table id="recipeTable"></table></div>
-    <div id="recipeSum" class="small"></div>
-  </section>
-
-  <section class="card full">
-    <h2>5. 결과</h2>
+    <h2>4. 결과</h2>
     <div class="buttons"><button onclick="copyText('labelText')">라벨 문구 복사</button><button onclick="copyText('reportText')">근거서 복사</button><button class="secondary" onclick="window.print()">인쇄/PDF</button></div>
     <h3>라벨용 한 줄 문구</h3>
     <div id="labelText" class="result"></div>
@@ -95,8 +89,7 @@
 </main>
 <script>
 const DV = { carb:324, sugar:100, fat:54, satFat:15, cholesterol:300, protein:55, sodium:2000 };
-let ingredients = [];
-let recipe = [];
+let bom = [];
 
 const presets = {
   strawberry: { name:'수제 딸기청', amount:'1.2kg', type:'액상차', recipe:[['냉동딸기',60],['자일로스설탕',38.95],['비타민C/소브산칼륨',1.05]] },
@@ -105,16 +98,15 @@ const presets = {
   grapefruit: { name:'수제 자몽청', amount:'1kg', type:'액상차', recipe:[['자몽',50],['자일로스설탕',49.35],['비타민C/소브산칼륨',0.65]] }
 };
 
-function seedIngredients(){
-  ingredients = [
-    {name:'냉동딸기', kcal:32, carb:7.7, sugar:4.9, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:0.7, sodium:1, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
-    {name:'레몬', kcal:29, carb:9.3, sugar:2.5, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:1.1, sodium:2, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
-    {name:'오렌지', kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
-    {name:'자몽', kcal:42, carb:10.7, sugar:6.9, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.8, sodium:0, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
-    {name:'자일로스설탕', kcal:400, carb:100, sugar:100, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'원료사 규격서/성분표 필요'},
-    {name:'비타민C/소브산칼륨', kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'미량 원료. 원료사 규격서 보관'}
-  ];
-}
+const SEED = {
+  '냉동딸기': {kcal:32, carb:7.7, sugar:4.9, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:0.7, sodium:1, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
+  '레몬': {kcal:29, carb:9.3, sugar:2.5, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:1.1, sodium:2, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
+  '오렌지': {kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
+  '자몽': {kcal:42, carb:10.7, sugar:6.9, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.8, sodium:0, source:'식품영양성분DB/국가표준식품성분표 확인 필요'},
+  '자일로스설탕': {kcal:400, carb:100, sugar:100, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'원료사 규격서/성분표 필요'},
+  '비타민C/소브산칼륨': {kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'미량 원료. 원료사 규격서 보관'}
+};
+function emptyNutri(){ return {kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0}; }
 
 function round(n, d=0){ const p=Math.pow(10,d); return Math.round((Number(n)||0)*p)/p; }
 function pct(v, dv){ return Math.round(((Number(v)||0)/dv)*100); }
@@ -129,39 +121,38 @@ function foodNameCell(x){
   return `<div class="food-base">${escapeHtml(base)}</div>`+(sub?`<div class="food-sub">${escapeHtml(sub)}</div>`:'');
 }
 
-function renderIngredients(){
-  const rows = ingredients.map((it,i)=>`<tr>
-    <td><input value="${escapeHtml(it.name)}" onchange="ingredients[${i}].name=this.value;renderAll()"></td>
-    <td class="num"><input type="number" value="${round(it.kcal,2)}" onchange="ingredients[${i}].kcal=+this.value"></td>
-    <td class="num"><input type="number" value="${round(it.carb,2)}" onchange="ingredients[${i}].carb=+this.value"></td>
-    <td class="num"><input type="number" value="${round(it.sugar,2)}" onchange="ingredients[${i}].sugar=+this.value"></td>
-    <td class="num"><input type="number" value="${round(it.fat,2)}" onchange="ingredients[${i}].fat=+this.value"></td>
-    <td class="num"><input type="number" value="${round(it.protein,2)}" onchange="ingredients[${i}].protein=+this.value"></td>
-    <td class="num"><input type="number" value="${round(it.sodium,2)}" onchange="ingredients[${i}].sodium=+this.value"></td>
-    <td class="src"><input title="${escapeHtml(it.source||'')}" value="${escapeHtml(it.source||'')}" onchange="ingredients[${i}].source=this.value"></td>
-    <td><button class="danger btn-sm" onclick="ingredients.splice(${i},1);renderAll()">삭제</button></td>
+function renderBom(){
+  const rows = bom.map((it,i)=>`<tr>
+    <td><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${it.percent}" step="0.01" onchange="bom[${i}].percent=+this.value;updateBomSum();calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.kcal,2)}" onchange="bom[${i}].kcal=+this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.carb,2)}" onchange="bom[${i}].carb=+this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.sugar,2)}" onchange="bom[${i}].sugar=+this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.fat,2)}" onchange="bom[${i}].fat=+this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.protein,2)}" onchange="bom[${i}].protein=+this.value;calculate()"></td>
+    <td class="num"><input type="number" value="${round(it.sodium,2)}" onchange="bom[${i}].sodium=+this.value;calculate()"></td>
+    <td class="src"><input title="${escapeHtml(it.source||'')}" value="${escapeHtml(it.source||'')}" onchange="bom[${i}].source=this.value"></td>
+    <td><button class="danger btn-sm" onclick="bom.splice(${i},1);renderBom();calculate()">삭제</button></td>
   </tr>`).join('');
-  document.getElementById('ingredientTable').innerHTML = `<tr><th>원료명</th><th>kcal</th><th>탄수화물</th><th>당류</th><th>지방</th><th>단백질</th><th>나트륨</th><th>출처</th><th></th></tr>${rows}`;
+  document.getElementById('bomTable').innerHTML = `<tr><th>원료명</th><th>배합비%</th><th>kcal</th><th>탄수화물(g)</th><th>당류(g)</th><th>지방(g)</th><th>단백질(g)</th><th>나트륨(mg)</th><th>출처</th><th></th></tr>${rows}`;
+  updateBomSum();
 }
-
-function renderRecipe(){
-  const opts = ingredients.map(i=>`<option>${escapeHtml(i.name)}</option>`).join('');
-  const rows = recipe.map((r,i)=>`<tr><td><select onchange="recipe[${i}].name=this.value">${opts}</select></td><td><input type="number" value="${r.percent}" step="0.01" onchange="recipe[${i}].percent=+this.value;updateRecipeSum()"></td><td><button class="danger" onclick="recipe.splice(${i},1);renderRecipe()">삭제</button></td></tr>`).join('');
-  document.getElementById('recipeTable').innerHTML = `<tr><th>원료</th><th>배합비 %</th><th></th></tr>${rows}`;
-  recipe.forEach((r,i)=>{ const sel=document.querySelectorAll('#recipeTable select')[i]; if(sel) sel.value=r.name; });
-  updateRecipeSum();
+function updateBomSum(){
+  const el=document.getElementById('bomSum'); if(!el) return;
+  if(!bom.length){ el.className='small'; el.textContent=''; return; }
+  const s=bom.reduce((a,b)=>a+(+b.percent||0),0); const ok=Math.abs(s-100)<=0.5;
+  el.className = ok ? 'ok' : 'warn';
+  el.innerHTML = ok ? `배합비 합계: <b>${round(s,2)}%</b>` : `⚠ 배합비 합계가 100%가 아닙니다 (현재 ${round(s,2)}%)`;
 }
-function updateRecipeSum(){ const s=recipe.reduce((a,b)=>a+(+b.percent||0),0); document.getElementById('recipeSum').innerHTML=`배합비 합계: <b>${round(s,2)}%</b>`; }
-function renderAll(){ renderIngredients(); renderRecipe(); persistMaster(); }
+function renderAll(){ renderBom(); }
 
 checkServer();
 function setActiveTab(key){
   document.querySelectorAll('.preset-tab').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
 }
-function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; recipe=p.recipe.map(([name,percent])=>({name,percent})); renderRecipe(); calculate(); setActiveTab(key); }
-function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; recipe=[]; renderRecipe(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; setActiveTab('new'); }
-function addIngredientManual(){ ingredients.push({name:'새 원료',kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0,source:'직접입력'}); renderAll(); }
-function addRecipeRow(){ recipe.push({name:ingredients[0]?.name||'',percent:0}); renderRecipe(); }
+function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const s=SEED[name]||{}; return {name, percent, ...emptyNutri(), ...s, source:(s.source||'')}; }); renderBom(); calculate(); setActiveTab(key); }
+function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; setActiveTab('new'); }
+function addBomRow(){ bom.push({name:'새 원료', percent:0, ...emptyNutri(), source:'직접입력'}); renderBom(); calculate(); }
 
 async function checkServer(){
   const el=document.getElementById('apiStatus'); el.textContent='확인 중...';
@@ -193,14 +184,14 @@ async function searchIngredient(){
   }catch(e){ status.textContent='조회 실패: '+e.message; }
 }
 function addApiIngredient(x){
-  ingredients.push({name:x.foodName,kcal:x.kcal,carb:x.carbohydrate,sugar:x.sugars,fat:x.fat,transFat:x.transFat,satFat:x.saturatedFat,cholesterol:x.cholesterol,protein:x.protein,sodium:x.sodium,source:x.source||'공공데이터포털 식품영양정보 Open API'}); renderAll();
+  bom.push({name:x.foodName, percent:0, kcal:x.kcal, carb:x.carbohydrate, sugar:x.sugars, fat:x.fat, transFat:x.transFat, satFat:x.saturatedFat, cholesterol:x.cholesterol, protein:x.protein, sodium:x.sodium, source:x.source||'공공데이터포털 식품영양정보 Open API'}); renderBom(); calculate();
 }
 
 function calculate(){
   const y=(+document.getElementById('yieldRate').value||100)/100; const factor = y>0 ? 1/y : 1;
   let total={kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0};
   const lines=[];
-  for(const r of recipe){ const ing=ingredients.find(i=>i.name===r.name); if(!ing) continue; const w=(+r.percent||0); const f=w/100*factor; ['kcal','carb','sugar','fat','transFat','satFat','cholesterol','protein','sodium'].forEach(k=> total[k]+= (+ing[k]||0)*f); lines.push({name:r.name, percent:w, source:ing.source}); }
+  for(const r of bom){ const w=(+r.percent||0); const f=w/100*factor; ['kcal','carb','sugar','fat','transFat','satFat','cholesterol','protein','sodium'].forEach(k=> total[k]+= (+r[k]||0)*f); lines.push({name:r.name, percent:w, source:r.source}); }
   const kcal=Math.round(total.kcal); const carb=Math.round(total.carb); const sugar=Math.round(total.sugar); const fat=Math.round(total.fat); const protein=Math.round(total.protein); const sodium=Math.round(total.sodium);
   const satFat=Math.round(total.satFat||0); const transFat=Math.round(total.transFat||0); const cholesterol=Math.round(total.cholesterol||0);
   const amount=document.getElementById('totalAmount').value; const pname=document.getElementById('productName').value;
@@ -209,13 +200,8 @@ function calculate(){
   document.getElementById('labelText').textContent=label; document.getElementById('reportText').textContent=report;
 }
 function copyText(id){ navigator.clipboard.writeText(document.getElementById(id).textContent); alert('복사했습니다.'); }
-function saveLocal(){ localStorage.setItem('nutritionStudio', JSON.stringify({ingredients,recipe})); alert('저장했습니다.'); }
-function loadLocal(){ const d=JSON.parse(localStorage.getItem('nutritionStudio')||'null'); if(d){ingredients=d.ingredients||ingredients; recipe=d.recipe||recipe; renderAll(); alert('불러왔습니다.');} }
-
-// ── [B] 원료 마스터 영속화 (전용 키, 수동 저장 'nutritionStudio'와 분리) ──
-function persistMaster(){ try{ localStorage.setItem('masterIngredients', JSON.stringify(ingredients)); }catch(e){} }
-function loadMaster(){ try{ const d=JSON.parse(localStorage.getItem('masterIngredients')||'null'); if(Array.isArray(d)&&d.length){ ingredients=d; } }catch(e){} }
-function attachMasterAutosave(){ const t=document.getElementById('ingredientTable'); if(t) t.addEventListener('change', persistMaster); }
+function saveLocal(){ localStorage.setItem('nutritionStudio', JSON.stringify({bom})); alert('저장했습니다.'); }
+function loadLocal(){ const d=JSON.parse(localStorage.getItem('nutritionStudio')||'null'); if(d&&Array.isArray(d.bom)){ bom=d.bom; renderBom(); calculate(); alert('불러왔습니다.'); } }
 
 // ── [A] 제품 저장/불러오기 "내 제품" ──
 function getSavedProducts(){ try{ return JSON.parse(localStorage.getItem('savedProducts')||'{}')||{}; }catch(e){ return {}; } }
@@ -223,7 +209,7 @@ function saveProduct(){
   const name=document.getElementById('productName').value.trim();
   if(!name){ alert('제품명을 입력하면 저장할 수 있습니다.'); return; }
   const data=getSavedProducts();
-  data[name]={ name, amount:document.getElementById('totalAmount').value, foodType:document.getElementById('foodType').value, yield:(+document.getElementById('yieldRate').value||100), recipe:recipe.map(r=>({name:r.name,percent:r.percent})) };
+  data[name]={ name, amount:document.getElementById('totalAmount').value, foodType:document.getElementById('foodType').value, yield:(+document.getElementById('yieldRate').value||100), bom:bom.map(r=>({...r})) };
   localStorage.setItem('savedProducts', JSON.stringify(data));
   renderSavedProducts(); setActiveTab('saved:'+name);
   alert(`'${name}' 제품을 저장했습니다.`);
@@ -241,8 +227,8 @@ function loadSavedProduct(name){
   document.getElementById('totalAmount').value=p.amount||'';
   document.getElementById('foodType').value=p.foodType||'';
   document.getElementById('yieldRate').value=(p.yield!=null?p.yield:100);
-  recipe=(p.recipe||[]).map(r=>({name:r.name,percent:r.percent}));
-  renderRecipe(); calculate(); setActiveTab('saved:'+name);
+  bom=(p.bom || (p.recipe||[]).map(r=>{ const s=SEED[r.name]||{}; return {name:r.name, percent:r.percent, ...emptyNutri(), ...s, source:(s.source||'')}; })).map(r=>({...r}));
+  renderBom(); calculate(); setActiveTab('saved:'+name);
 }
 function deleteSavedProduct(name){
   if(!confirm(`'${name}' 저장 제품을 삭제할까요?`)) return;
@@ -251,7 +237,7 @@ function deleteSavedProduct(name){
   renderSavedProducts();
 }
 
-seedIngredients(); loadMaster(); loadPreset('strawberry'); renderSavedProducts(); renderAll(); calculate(); attachMasterAutosave();
+loadPreset('strawberry'); renderSavedProducts();
 </script>
 </body>
 </html>

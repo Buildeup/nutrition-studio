@@ -21,10 +21,6 @@
   <div class="sub">원재료 배합비 기반 영양표시 계산기 · API 키는 서버 .env에만 저장됩니다.</div>
 </header>
 <main>
-  <section class="card warn full">
-    <b>보안 구조</b> : 이 화면에는 공공데이터 API 키를 넣지 않습니다. 브라우저는 <code>/api/search-ingredient</code>만 호출하고, 실제 인증키는 서버의 <code>.env</code>에 보관됩니다.
-  </section>
-
   <div class="grid">
     <section class="card">
       <h2>1. 제품 정보</h2>
@@ -45,7 +41,7 @@
     <section class="card">
       <h2>2. API 원료 조회</h2>
       <div class="row"><label>검색어</label><input id="apiQuery" placeholder="예: 딸기, 레몬, 오렌지, 자몽"></div>
-      <div class="row"><label>End Point</label><input id="endpoint" value="https://api.data.go.kr/openapi/tn_pubr_public_nutri_food_info_api"></div>
+      <input id="endpoint" type="hidden" value="https://api.data.go.kr/openapi/tn_pubr_public_nutri_info_api">
       <div class="buttons"><button class="green" onclick="searchIngredient()">조회</button><button class="secondary" onclick="checkServer()">서버 확인</button></div>
       <div id="apiStatus" class="small" style="margin-top:10px"></div>
       <div id="apiResults" style="margin-top:12px"></div>
@@ -128,6 +124,7 @@ function renderRecipe(){
 function updateRecipeSum(){ const s=recipe.reduce((a,b)=>a+(+b.percent||0),0); document.getElementById('recipeSum').innerHTML=`배합비 합계: <b>${round(s,2)}%</b>`; }
 function renderAll(){ renderIngredients(); renderRecipe(); }
 
+checkServer();
 function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; recipe=p.recipe.map(([name,percent])=>({name,percent})); renderRecipe(); calculate(); }
 function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; recipe=[]; renderRecipe(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; }
 function addIngredientManual(){ ingredients.push({name:'새 원료',kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0,source:'직접입력'}); renderAll(); }
@@ -135,7 +132,18 @@ function addRecipeRow(){ recipe.push({name:ingredients[0]?.name||'',percent:0});
 
 async function checkServer(){
   const el=document.getElementById('apiStatus'); el.textContent='확인 중...';
-  try{ const r=await fetch('/api/health'); const j=await r.json(); el.innerHTML = j.hasServiceKey ? '<span class="pill">서버 정상 · API 키 있음</span>' : '<span class="pill">서버 정상 · API 키 없음(.env 확인)</span>'; }
+  try{
+    const r=await fetch('/api/health'); const j=await r.json();
+    if(j.endpoint) document.getElementById('endpoint').value=j.endpoint;
+    const keyOk=j.hasServiceKey;
+    const endpointOk=j.hasEndpoint;
+    const pills=[
+      '<span class="pill">서버 정상</span>',
+      keyOk ? '<span class="pill">일반 인증키 있음</span>' : '<span class="pill">일반 인증키 없음 (.env의 DATA_GO_KR_SERVICE_KEY)</span>',
+      endpointOk ? '<span class="pill">End Point (.env)</span>' : '<span class="pill">End Point 기본값 사용</span>',
+    ];
+    el.innerHTML=pills.join(' ');
+  }
   catch(e){ el.textContent='서버 연결 실패. http://localhost:5174 로 접속했는지 확인하세요.'; }
 }
 

@@ -27,7 +27,7 @@
     .cell-food{min-width:220px;white-space:normal}
     .cell-food .food-base{font-weight:700}
     .cell-food .food-sub{font-size:11px;color:var(--muted);margin-top:2px}
-    #bomTable td.src{min-width:200px}
+    #bomTable td.src{min-width:230px}
     #bomTable td.src input{text-overflow:ellipsis}
     .saved-item{display:inline-flex;align-items:center;gap:2px}
     .saved-del{background:#efe7dc;color:#9b5f2f;border:0;border-radius:8px;padding:8px 10px;font-weight:800;line-height:1;cursor:pointer}
@@ -39,7 +39,16 @@
     .rs-unit{font-size:12px;font-weight:600;color:var(--muted)}
     .rs-pct{font-size:11px;color:var(--accent);margin-top:5px;font-weight:600}
     .rs-empty{color:var(--muted);font-size:13px;padding:6px 0}
-    @media(max-width:860px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+    .name-cell{display:flex;gap:6px;align-items:center}
+    .name-cell input{flex:1;width:auto;min-width:84px}
+    #bomTable td:first-child{min-width:188px}
+    .lookup-row td{background:#faf6ef;padding:10px}
+    .lk-head{margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .lk-list{display:flex;flex-direction:column;gap:6px}
+    .lk-item{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+    .lk-food{min-width:150px}
+    .lk-nums{flex:1;color:var(--muted)}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.lk-item{flex-wrap:wrap}}
   </style>
 </head>
 <body>
@@ -99,6 +108,7 @@
 <script>
 const DV = { carb:324, sugar:100, fat:54, satFat:15, cholesterol:300, protein:55, sodium:2000 };
 let bom = [];
+let lookup = { row:null, loading:false, error:'', rows:[] };
 
 const presets = {
   strawberry: { name:'수제 딸기청', amount:'1.2kg', type:'액상차', recipe:[['냉동딸기',60],['자일로스설탕',38.95],['비타민C/소브산칼륨',1.05]] },
@@ -129,10 +139,55 @@ function foodNameCell(x){
   if(!sub){ const m=String(x.foodName||'').match(/\(([^)]*)\)\s*$/); if(m) sub=m[1]; }
   return `<div class="food-base">${escapeHtml(base)}</div>`+(sub?`<div class="food-sub">${escapeHtml(sub)}</div>`:'');
 }
+function cleanLabel(v){ const t=String(v==null?'':v).trim(); if(!t) return ''; if(/^(해당\s*없음|없음|미상|미정|n\/?a|null)$/i.test(t)) return ''; return t; }
+function buildApiSource(x){
+  const food = cleanLabel(x.foodName) || cleanLabel(x.baseName) || '';
+  const maker = cleanLabel(x.maker);
+  const parts = [];
+  String(x.source||'').split('/').map(s=>cleanLabel(s)).filter(Boolean).forEach(p=>{ if(p!==maker && !parts.includes(p)) parts.push(p); });
+  if(maker && !(food && food.includes(maker)) && !parts.includes(maker)) parts.push(maker);
+  const origin = cleanLabel(x.origin);
+  if(origin && !(food && food.includes(origin))) parts.push('원산지 '+origin);
+  if(!parts.some(p=>/Open\s*API|공공데이터/i.test(p))) parts.push('공공데이터포털 Open API');
+  const right = parts.join(' / ');
+  return food ? (right ? `${food} — ${right}` : food) : (right || '공공데이터포털 식품영양정보 Open API');
+}
+async function lookupRow(i){
+  if(!bom[i]) return;
+  const name=String(bom[i].name||'').trim();
+  if(!name){ alert('원료명을 입력한 뒤 조회하세요.'); return; }
+  lookup={ row:bom[i], loading:true, error:'', rows:[] }; renderBom();
+  try{
+    const endpoint=document.getElementById('endpoint').value.trim();
+    const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(name)}&endpoint=${encodeURIComponent(endpoint)}`);
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||j.message||'조회 실패');
+    lookup={ row:bom[i], loading:false, error:'', rows:(j.rows||[]).slice(0,10) };
+  }catch(e){ lookup={ row:bom[i], loading:false, error:e.message, rows:[] }; }
+  renderBom();
+}
+function fillBomRow(i, x){
+  if(!bom[i]) return;
+  Object.assign(bom[i], { kcal:x.kcal, carb:x.carbohydrate, sugar:x.sugars, fat:x.fat, satFat:x.saturatedFat, transFat:x.transFat, cholesterol:x.cholesterol, protein:x.protein, sodium:x.sodium, source:buildApiSource(x) });
+  lookup={ row:null, loading:false, error:'', rows:[] };
+  renderBom(); calculate();
+}
+function closeLookup(){ lookup={ row:null, loading:false, error:'', rows:[] }; renderBom(); }
+function lookupRowHtml(i){
+  let inner;
+  const nm = escapeHtml(bom[i]?bom[i].name:'');
+  if(lookup.loading){ inner=`<span class="small">‘${nm}’ 조회 중…</span>`; }
+  else if(lookup.error){ inner=`<span class="small">조회 실패: ${escapeHtml(lookup.error)}</span> <button class="btn-sm secondary" onclick="closeLookup()">닫기</button>`; }
+  else if(!lookup.rows.length){ inner=`<span class="small">‘${nm}’ 검색 결과가 없습니다.</span> <button class="btn-sm secondary" onclick="closeLookup()">닫기</button>`; }
+  else {
+    const list=lookup.rows.map(x=>{ const slim=Object.assign({},x); delete slim.raw; return `<div class="lk-item"><div class="lk-food">${foodNameCell(x)}</div><div class="lk-nums small">${round(x.kcal,1)}kcal · 탄${round(x.carbohydrate,1)} · 당${round(x.sugars,1)} · 지${round(x.fat,1)} · 단${round(x.protein,1)} · 나${round(x.sodium,1)}mg</div><button class="btn-sm" onclick='fillBomRow(${i}, ${JSON.stringify(slim).replace(/'/g,"&#39;")})'>선택</button></div>`; }).join('');
+    inner=`<div class="lk-head"><span class="small">‘${nm}’ 검색 결과 ${lookup.rows.length}건 — 선택하면 이 행에 영양값·출처가 채워집니다</span> <button class="btn-sm secondary" onclick="closeLookup()">닫기</button></div><div class="lk-list">${list}</div>`;
+  }
+  return `<tr class="lookup-row"><td colspan="10">${inner}</td></tr>`;
+}
 
 function renderBom(){
   const rows = bom.map((it,i)=>`<tr>
-    <td><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"></td>
+    <td><div class="name-cell"><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"><button class="btn-sm secondary" onclick="lookupRow(${i})">조회</button></div></td>
     <td class="num"><input type="number" value="${it.percent}" step="0.01" onchange="bom[${i}].percent=+this.value;updateBomSum();calculate()"></td>
     <td class="num"><input type="number" value="${round(it.kcal,2)}" onchange="bom[${i}].kcal=+this.value;calculate()"></td>
     <td class="num"><input type="number" value="${round(it.carb,2)}" onchange="bom[${i}].carb=+this.value;calculate()"></td>
@@ -142,7 +197,7 @@ function renderBom(){
     <td class="num"><input type="number" value="${round(it.sodium,2)}" onchange="bom[${i}].sodium=+this.value;calculate()"></td>
     <td class="src"><input title="${escapeHtml(it.source||'')}" value="${escapeHtml(it.source||'')}" onchange="bom[${i}].source=this.value"></td>
     <td><button class="danger btn-sm" onclick="bom.splice(${i},1);renderBom();calculate()">삭제</button></td>
-  </tr>`).join('');
+  </tr>`+(lookup.row===it?lookupRowHtml(i):'')).join('');
   document.getElementById('bomTable').innerHTML = `<tr><th>원료명</th><th>배합비%</th><th>kcal</th><th>탄수화물(g)</th><th>당류(g)</th><th>지방(g)</th><th>단백질(g)</th><th>나트륨(mg)</th><th>출처</th><th></th></tr>${rows}`;
   updateBomSum();
 }
@@ -193,7 +248,7 @@ async function searchIngredient(){
   }catch(e){ status.textContent='조회 실패: '+e.message; }
 }
 function addApiIngredient(x){
-  bom.push({name:x.foodName, percent:0, kcal:x.kcal, carb:x.carbohydrate, sugar:x.sugars, fat:x.fat, transFat:x.transFat, satFat:x.saturatedFat, cholesterol:x.cholesterol, protein:x.protein, sodium:x.sodium, source:x.source||'공공데이터포털 식품영양정보 Open API'}); renderBom(); calculate();
+  bom.push({name:x.foodName, percent:0, kcal:x.kcal, carb:x.carbohydrate, sugar:x.sugars, fat:x.fat, transFat:x.transFat, satFat:x.saturatedFat, cholesterol:x.cholesterol, protein:x.protein, sodium:x.sodium, source:buildApiSource(x)}); renderBom(); calculate();
 }
 
 function calculate(){

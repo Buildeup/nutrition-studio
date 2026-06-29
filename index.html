@@ -32,6 +32,13 @@
     .saved-item{display:inline-flex;align-items:center;gap:2px}
     .saved-del{background:#efe7dc;color:#9b5f2f;border:0;border-radius:8px;padding:8px 10px;font-weight:800;line-height:1;cursor:pointer}
     .saved-del:hover{background:#e3d8c8}
+    #resultSummary{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+    .rs-card{flex:1 1 120px;min-width:108px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+    .rs-label{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .rs-val{font-size:21px;font-weight:800;color:var(--ink);line-height:1.1}
+    .rs-unit{font-size:12px;font-weight:600;color:var(--muted)}
+    .rs-pct{font-size:11px;color:var(--accent);margin-top:5px;font-weight:600}
+    .rs-empty{color:var(--muted);font-size:13px;padding:6px 0}
     @media(max-width:860px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
   </style>
 </head>
@@ -81,6 +88,8 @@
   <section class="card full">
     <h2>4. 결과</h2>
     <div class="buttons"><button onclick="copyText('labelText')">라벨 문구 복사</button><button onclick="copyText('reportText')">근거서 복사</button><button class="secondary" onclick="window.print()">인쇄/PDF</button></div>
+    <h3>100g당 영양성분</h3>
+    <div id="resultSummary"></div>
     <h3>라벨용 한 줄 문구</h3>
     <div id="labelText" class="result"></div>
     <h3>내부 산출 근거서</h3>
@@ -151,7 +160,7 @@ function setActiveTab(key){
   document.querySelectorAll('.preset-tab').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
 }
 function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const s=SEED[name]||{}; return {name, percent, ...emptyNutri(), ...s, source:(s.source||'')}; }); renderBom(); calculate(); setActiveTab(key); }
-function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; setActiveTab('new'); }
+function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; renderResultSummary(); setActiveTab('new'); }
 function addBomRow(){ bom.push({name:'새 원료', percent:0, ...emptyNutri(), source:'직접입력'}); renderBom(); calculate(); }
 
 async function checkServer(){
@@ -198,6 +207,25 @@ function calculate(){
   const label=`영양정보 | 총 내용량 ${amount} / 100g당 ${kcal}kcal / 나트륨 ${sodium}mg ${pct(sodium,DV.sodium)}% / 탄수화물 ${carb}g ${pct(carb,DV.carb)}% / 당류 ${sugar}g ${pct(sugar,DV.sugar)}% / 지방 ${fat}g ${pct(fat,DV.fat)}% / 트랜스지방 ${transFat}g / 포화지방 ${satFat}g ${pct(satFat,DV.satFat)}% / 콜레스테롤 ${cholesterol}mg ${pct(cholesterol,DV.cholesterol)}% / 단백질 ${protein}g ${pct(protein,DV.protein)}% / 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.`;
   const report=`영양성분 산출 근거서\n\n제품명: ${pname}\n총 내용량: ${amount}\n식품유형: ${document.getElementById('foodType').value}\n기준량: 100g당\n제조수율: ${document.getElementById('yieldRate').value}%\n수율 보정계수: ${round(factor,4)}\n\n[배합비 기준 계산표]\n${lines.map(x=>`- ${x.name}: ${x.percent}%`).join('\n')}\n\n[원료별 영양성분 출처]\n${lines.map(x=>`- ${x.name}: ${x.source}`).join('\n')}\n\n[최종 표시값]\n${label}\n\n[검토 의견]\n본 산출값은 제조원 제공 배합비, 원료별 영양성분 자료, 제조수율을 기준으로 계산한 내부 표시 검토용 값입니다. 최종 인쇄 전 제조원 확인 및 필요 시 시험성적서 확보를 권장합니다.`;
   document.getElementById('labelText').textContent=label; document.getElementById('reportText').textContent=report;
+  renderResultSummary({kcal,carb,sugar,fat,protein,sodium,satFat,transFat,cholesterol});
+}
+function renderResultSummary(v){
+  v=v||{};
+  const el=document.getElementById('resultSummary'); if(!el) return;
+  const sum=bom.reduce((a,b)=>a+(+b.percent||0),0);
+  if(!bom.length || sum===0){ el.innerHTML=`<div class="rs-empty">원료와 배합비%를 입력하세요.</div>`; return; }
+  const cards=[
+    ['열량', `${v.kcal}`, 'kcal', null],
+    ['탄수화물', fmtG(v.carb), '', pct(v.carb,DV.carb)],
+    ['당류', fmtG(v.sugar), '', pct(v.sugar,DV.sugar)],
+    ['지방', fmtG(v.fat), '', pct(v.fat,DV.fat)],
+    ['단백질', fmtG(v.protein), '', pct(v.protein,DV.protein)],
+    ['나트륨', fmtMg(v.sodium), '', pct(v.sodium,DV.sodium)],
+    ['포화지방', fmtG(v.satFat), '', pct(v.satFat,DV.satFat)],
+    ['트랜스지방', fmtG(v.transFat), '', null],
+    ['콜레스테롤', fmtMg(v.cholesterol), '', pct(v.cholesterol,DV.cholesterol)]
+  ];
+  el.innerHTML = cards.map(([label,val,unit,p])=>`<div class="rs-card"><div class="rs-label">${label}</div><div class="rs-val">${val}${unit?` <span class="rs-unit">${unit}</span>`:''}</div>${p!=null?`<div class="rs-pct">1일기준 ${p}%</div>`:''}</div>`).join('');
 }
 function copyText(id){ navigator.clipboard.writeText(document.getElementById(id).textContent); alert('복사했습니다.'); }
 function saveLocal(){ localStorage.setItem('nutritionStudio', JSON.stringify({bom})); alert('저장했습니다.'); }

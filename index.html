@@ -28,6 +28,9 @@
     .cell-food .food-base{font-weight:700}
     .cell-food .food-sub{font-size:11px;color:var(--muted);margin-top:2px}
     #bomTable td.src{min-width:230px}
+    #bomTable td.num{min-width:64px}
+    #bomTable td.num input{min-width:52px}
+    #bomTable{min-width:860px}
     #bomTable td.src input{text-overflow:ellipsis}
     .saved-item{display:inline-flex;align-items:center;gap:2px}
     .saved-del{background:#efe7dc;color:#9b5f2f;border:0;border-radius:8px;padding:8px 10px;font-weight:800;line-height:1;cursor:pointer}
@@ -91,7 +94,6 @@
     <section class="card">
       <h2>2. API 원료 조회</h2>
       <div class="row"><label>검색어</label><input id="apiQuery" placeholder="예: 딸기, 레몬, 오렌지, 자몽"></div>
-      <input id="endpoint" type="hidden" value="https://api.data.go.kr/openapi/tn_pubr_public_nutri_info_api">
       <div class="buttons"><button class="green" onclick="searchIngredient()">조회</button><button class="secondary" onclick="checkServer()">서버 확인</button></div>
       <div id="apiStatus" class="small" style="margin-top:10px"></div>
       <div id="apiResults" style="margin-top:12px"></div>
@@ -101,7 +103,7 @@
   <section class="card full">
     <h2>3. 원재료(BOM)</h2>
     <div class="small" style="margin:0 0 10px">원료와 배합비%를 넣으면(합계 100%) 아래 결과가 자동 산출됩니다.</div>
-    <div class="buttons"><button onclick="addBomRow()">원료 추가</button><button class="green" onclick="calculate()">계산하기</button><button class="secondary" onclick="saveLocal()">로컬 저장</button><button class="secondary" onclick="loadLocal()">불러오기</button><button class="secondary" onclick="saveToLibrary()">라이브러리에 저장</button><button class="secondary" onclick="toggleLibrary()">라이브러리에서 추가</button></div>
+    <div class="buttons"><button onclick="addBomRow()">원료 추가</button><button class="green" onclick="calculate()">계산하기</button><button class="secondary" style="margin-left:auto" onclick="saveToLibrary()">라이브러리에 저장</button><button class="secondary" onclick="toggleLibrary()">라이브러리에서 추가</button></div>
     <div id="libPanel" style="display:none;margin-top:10px"></div>
     <div style="overflow:auto;margin-top:12px"><table id="bomTable"></table></div>
     <div id="bomSum" style="margin-top:10px"></div>
@@ -209,8 +211,7 @@ async function lookupRow(i){
   if(!name){ alert('원료명을 입력한 뒤 조회하세요.'); return; }
   lookup={ row:bom[i], loading:true, error:'', rows:[] }; renderBom();
   try{
-    const endpoint=document.getElementById('endpoint').value.trim();
-    const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(name)}&endpoint=${encodeURIComponent(endpoint)}`);
+    const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(name)}`);
     const j=await r.json(); if(!r.ok) throw new Error(j.error||j.message||'조회 실패');
     lookup={ row:bom[i], loading:false, error:'', rows:(j.rows||[]).slice(0,10) };
   }catch(e){ lookup={ row:bom[i], loading:false, error:e.message, rows:[] }; }
@@ -274,7 +275,6 @@ async function checkServer(){
   const el=document.getElementById('apiStatus'); el.textContent='확인 중...';
   try{
     const r=await fetch('/api/health'); const j=await r.json();
-    if(j.endpoint) document.getElementById('endpoint').value=j.endpoint;
     const keyOk=j.hasServiceKey;
     const endpointOk=j.hasEndpoint;
     const pills=[
@@ -288,12 +288,12 @@ async function checkServer(){
 }
 
 async function searchIngredient(){
-  const q=document.getElementById('apiQuery').value.trim(); const endpoint=document.getElementById('endpoint').value.trim();
+  const q=document.getElementById('apiQuery').value.trim();
   const status=document.getElementById('apiStatus'); const box=document.getElementById('apiResults');
   if(!q){ status.textContent='검색어를 입력하세요.'; return; }
   status.textContent='조회 중...'; box.innerHTML='';
   try{
-    const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(q)}&endpoint=${encodeURIComponent(endpoint)}`);
+    const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(q)}`);
     const j=await r.json(); if(!r.ok) throw new Error(j.error || j.message || '조회 실패');
     status.textContent=`조회 결과 ${j.count}건`;
     box.innerHTML = `<div class="small" style="margin-bottom:6px">${j.count}건</div>` + `<table><tr><th>식품명</th><th>kcal</th><th>탄수화물(g)</th><th>당류(g)</th><th>지방(g)</th><th>단백질(g)</th><th>나트륨(mg)</th><th></th></tr>` + j.rows.slice(0,10).map((x,idx)=>`<tr><td class="cell-food">${foodNameCell(x)}</td><td class="num">${round(x.kcal,1)}</td><td class="num">${round(x.carbohydrate,1)}</td><td class="num">${round(x.sugars,1)}</td><td class="num">${round(x.fat,1)}</td><td class="num">${round(x.protein,1)}</td><td class="num">${round(x.sodium,1)}</td><td><button class="btn-sm" onclick='addApiIngredient(${JSON.stringify(x).replace(/'/g,"&#39;")})'>등록</button></td></tr>`).join('') + `</table>`;
@@ -337,8 +337,6 @@ function renderResultSummary(v){
   el.innerHTML = cards.map(([label,val,unit,p])=>`<div class="rs-card"><div class="rs-label">${label}</div><div class="rs-val">${val}${unit?` <span class="rs-unit">${unit}</span>`:''}</div>${p!=null?`<div class="rs-pct">1일기준 ${p}%</div>`:''}</div>`).join('');
 }
 function copyText(id){ navigator.clipboard.writeText(document.getElementById(id).textContent); alert('복사했습니다.'); }
-function saveLocal(){ localStorage.setItem('nutritionStudio', JSON.stringify({bom})); alert('저장했습니다.'); }
-function loadLocal(){ const d=JSON.parse(localStorage.getItem('nutritionStudio')||'null'); if(d&&Array.isArray(d.bom)){ bom=d.bom; renderBom(); calculate(); alert('불러왔습니다.'); } }
 
 // ── [A] 제품 저장/불러오기 "내 제품" ──
 function getSavedProducts(){ try{ return JSON.parse(localStorage.getItem('savedProducts')||'{}')||{}; }catch(e){ return {}; } }

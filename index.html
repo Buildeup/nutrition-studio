@@ -39,9 +39,11 @@
     .rs-unit{font-size:12px;font-weight:600;color:var(--muted)}
     .rs-pct{font-size:11px;color:var(--accent);margin-top:5px;font-weight:600}
     .rs-empty{color:var(--muted);font-size:13px;padding:6px 0}
-    .name-cell{display:flex;gap:6px;align-items:center}
+    .name-cell{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
     .name-cell input{flex:1;width:auto;min-width:84px}
     #bomTable td:first-child{min-width:188px}
+    .chip-empty{display:inline-flex;align-items:center;background:var(--line);color:var(--muted);font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap}
+    .btn-attn{box-shadow:0 0 0 2px rgba(155,95,47,.28)}
     .lookup-row td{background:#faf6ef;padding:10px}
     .lk-head{margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .lk-list{display:flex;flex-direction:column;gap:6px}
@@ -99,6 +101,7 @@
     <div class="buttons"><button onclick="copyText('labelText')">라벨 문구 복사</button><button onclick="copyText('reportText')">근거서 복사</button><button class="secondary" onclick="window.print()">인쇄/PDF</button></div>
     <h3>100g당 영양성분</h3>
     <div id="resultSummary"></div>
+    <div id="emptyNutriHint" class="small" style="margin-bottom:12px;display:none"></div>
     <h3>라벨용 한 줄 문구</h3>
     <div id="labelText" class="result"></div>
     <h3>내부 산출 근거서</h3>
@@ -152,6 +155,15 @@ function buildApiSource(x){
   const right = parts.join(' / ');
   return food ? (right ? `${food} — ${right}` : food) : (right || '공공데이터포털 식품영양정보 Open API');
 }
+function rowEmptyNutri(it){ return ['kcal','carb','sugar','fat','protein','sodium','satFat','transFat','cholesterol'].every(k=>!(+it[k])); }
+function needsLookup(it){ return (+it.percent>0) && rowEmptyNutri(it); }
+function renderEmptyNutriHint(){
+  const el=document.getElementById('emptyNutriHint'); if(!el) return;
+  const names=bom.filter(needsLookup).map(b=>(b.name&&b.name.trim())||'(이름 없음)');
+  if(!names.length){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display='';
+  el.textContent=`영양값이 비어 결과에 반영되지 않은 원료: ${names.join(', ')} (행의 [조회]로 값을 채우세요)`;
+}
 async function lookupRow(i){
   if(!bom[i]) return;
   const name=String(bom[i].name||'').trim();
@@ -187,7 +199,7 @@ function lookupRowHtml(i){
 
 function renderBom(){
   const rows = bom.map((it,i)=>`<tr>
-    <td><div class="name-cell"><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"><button class="btn-sm secondary" onclick="lookupRow(${i})">조회</button></div></td>
+    <td><div class="name-cell"><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"><button class="btn-sm ${needsLookup(it)?'btn-attn':'secondary'}" onclick="lookupRow(${i})">조회</button>${needsLookup(it)?'<span class="chip-empty">값 없음 · 조회 필요</span>':''}</div></td>
     <td class="num"><input type="number" value="${it.percent}" step="0.01" onchange="bom[${i}].percent=+this.value;updateBomSum();calculate()"></td>
     <td class="num"><input type="number" value="${round(it.kcal,2)}" onchange="bom[${i}].kcal=+this.value;calculate()"></td>
     <td class="num"><input type="number" value="${round(it.carb,2)}" onchange="bom[${i}].carb=+this.value;calculate()"></td>
@@ -266,6 +278,7 @@ function calculate(){
 }
 function renderResultSummary(v){
   v=v||{};
+  renderEmptyNutriHint();
   const el=document.getElementById('resultSummary'); if(!el) return;
   const sum=bom.reduce((a,b)=>a+(+b.percent||0),0);
   if(!bom.length || sum===0){ el.innerHTML=`<div class="rs-empty">원료와 배합비%를 입력하세요.</div>`; return; }

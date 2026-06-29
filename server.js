@@ -38,21 +38,54 @@ function normalizeRows(payload) {
   else if (Array.isArray(payload?.row)) rows = payload.row;
   else if (Array.isArray(payload)) rows = payload;
 
-  return rows.map((row) => ({
-    foodName: String(pick(row, ['DESC_KOR', 'foodNm', 'FOOD_NM_KR', 'FOOD_NM', 'name', '식품명']) || ''),
-    servingSize: parseServingSize(pick(row, ['SERVING_SIZE', 'servingSize', 'SERVING_WT', 'nutConSrtrQua', '영양성분함량기준량']) || 100) || 100,
-    kcal: toNumber(pick(row, ['NUTR_CONT1', 'enerc', 'ENERC_KCAL', 'energy', '에너지(kcal)', '에너지'])),
-    carbohydrate: toNumber(pick(row, ['NUTR_CONT2', 'chocdf', 'CHOCDF', 'carbohydrate', '탄수화물(g)', '탄수화물'])),
-    protein: toNumber(pick(row, ['NUTR_CONT3', 'prot', 'PROT', 'protein', '단백질(g)', '단백질'])),
-    fat: toNumber(pick(row, ['NUTR_CONT4', 'fatce', 'FATCE', 'fat', '지방(g)', '지방'])),
-    sugars: toNumber(pick(row, ['NUTR_CONT5', 'sugar', 'SUGAR', 'sugars', '당류(g)', '당류'])),
-    sodium: toNumber(pick(row, ['NUTR_CONT6', 'nat', 'NAT', 'sodium', '나트륨(mg)', '나트륨'])),
-    cholesterol: toNumber(pick(row, ['NUTR_CONT7', 'chole', 'CHOLE', 'cholesterol', '콜레스테롤(mg)', '콜레스테롤'])),
-    saturatedFat: toNumber(pick(row, ['NUTR_CONT8', 'fasat', 'FASAT', 'saturatedFat', '포화지방산(g)', '포화지방'])),
-    transFat: toNumber(pick(row, ['NUTR_CONT9', 'fatrn', 'FATRN', 'transFat', '트랜스지방산(g)', '트랜스지방'])),
-    source: String(pick(row, ['SUB_REF_NAME', 'srcNm', 'source', '출처']) || '공공데이터포털 식품영양정보 Open API'),
-    raw: row,
-  })).filter((r) => r.foodName);
+  return rows.map((row) => {
+    // 가장 구체적인 식품명 우선: 세분류명 등 세부명 → 식품명 → 대표식품명 순.
+    const baseName = String(pick(row, [
+      'foodLv4Nm', 'foodLv3Nm', 'FOOD_LV4_NM', 'FOOD_LV3_NM', '소분류명', '세분류명', '식품세부명',
+      'DESC_KOR', 'foodNm', 'FOOD_NM_KR', 'FOOD_NM', 'name', '식품명',
+      'repFoodNm', 'REP_FOOD_NM', '대표식품명',
+    ]) || '').trim();
+
+    // 대표식품명만 반복되는 데이터(예: '딸기')를 구분할 보조 정보.
+    const foodType = cleanLabel(pick(row, ['typeNm', 'TYPE_NM', '식품유형']));
+    const maker = cleanLabel(pick(row, ['mkrNm', 'companyNm', 'rtlBzentyNm', 'MKR_NM', '제조사명', '업체명', '유통업체명']));
+    const foodSize = cleanLabel(pick(row, ['foodSize', 'FOOD_SIZE', '식품중량']));
+    const origin = cleanLabel(pick(row, ['cooNm', 'COO_NM', '원산지국명', '원산지']));
+
+    // 식품명 옆에 분류/업체명/중량/원산지를 덧붙여 가공품·생것을 구분 가능하게 표시.
+    const detailParts = [foodType, maker, foodSize, origin].filter((v) => v && v !== baseName);
+    const foodName = detailParts.length ? `${baseName} (${detailParts.join(' · ')})` : baseName;
+
+    const srcName = cleanLabel(pick(row, ['SUB_REF_NAME', 'srcNm', 'source', '출처']));
+
+    return {
+      foodName,
+      baseName,
+      foodType,
+      maker,
+      foodSize,
+      origin,
+      servingSize: parseServingSize(pick(row, ['SERVING_SIZE', 'servingSize', 'SERVING_WT', 'nutConSrtrQua', '영양성분함량기준량']) || 100) || 100,
+      kcal: toNumber(pick(row, ['NUTR_CONT1', 'enerc', 'ENERC_KCAL', 'energy', '에너지(kcal)', '에너지'])),
+      carbohydrate: toNumber(pick(row, ['NUTR_CONT2', 'chocdf', 'CHOCDF', 'carbohydrate', '탄수화물(g)', '탄수화물'])),
+      protein: toNumber(pick(row, ['NUTR_CONT3', 'prot', 'PROT', 'protein', '단백질(g)', '단백질'])),
+      fat: toNumber(pick(row, ['NUTR_CONT4', 'fatce', 'FATCE', 'fat', '지방(g)', '지방'])),
+      sugars: toNumber(pick(row, ['NUTR_CONT5', 'sugar', 'SUGAR', 'sugars', '당류(g)', '당류'])),
+      sodium: toNumber(pick(row, ['NUTR_CONT6', 'nat', 'NAT', 'sodium', '나트륨(mg)', '나트륨'])),
+      cholesterol: toNumber(pick(row, ['NUTR_CONT7', 'chole', 'CHOLE', 'cholesterol', '콜레스테롤(mg)', '콜레스테롤'])),
+      saturatedFat: toNumber(pick(row, ['NUTR_CONT8', 'fasat', 'FASAT', 'saturatedFat', '포화지방산(g)', '포화지방'])),
+      transFat: toNumber(pick(row, ['NUTR_CONT9', 'fatrn', 'FATRN', 'transFat', '트랜스지방산(g)', '트랜스지방'])),
+      source: [srcName || '공공데이터포털 식품영양정보 Open API', maker].filter(Boolean).join(' / '),
+      raw: row,
+    };
+  }).filter((r) => r.baseName);
+}
+
+function cleanLabel(value) {
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (!text) return '';
+  if (/^(해당\s*없음|없음|미상|미정|n\/?a|null)$/i.test(text)) return '';
+  return text;
 }
 
 function parseServingSize(value) {

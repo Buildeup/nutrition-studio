@@ -29,6 +29,9 @@
     .cell-food .food-sub{font-size:11px;color:var(--muted);margin-top:2px}
     #ingredientTable td.src{min-width:200px}
     #ingredientTable td.src input{text-overflow:ellipsis}
+    .saved-item{display:inline-flex;align-items:center;gap:2px}
+    .saved-del{background:#efe7dc;color:#9b5f2f;border:0;border-radius:8px;padding:8px 10px;font-weight:800;line-height:1;cursor:pointer}
+    .saved-del:hover{background:#e3d8c8}
     @media(max-width:860px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
   </style>
 </head>
@@ -52,7 +55,9 @@
         <button class="secondary preset-tab" data-preset="orange" onclick="loadPreset('orange')">오렌지청</button>
         <button class="secondary preset-tab" data-preset="grapefruit" onclick="loadPreset('grapefruit')">자몽청</button>
         <button class="secondary preset-tab" data-preset="new" onclick="newProduct()">새 제품</button>
+        <button class="green" onclick="saveProduct()">제품 저장</button>
       </div>
+      <div id="savedWrap" style="margin-top:8px"></div>
     </section>
 
     <section class="card">
@@ -67,6 +72,7 @@
 
   <section class="card full">
     <h2>3. 원료 마스터</h2>
+    <div class="small" style="margin:0 0 10px">여기는 원료별 영양성분(100g당) DB입니다. 실제 제품 영양성분은 ④ 배합비에서 원료와 비율(%)을 입력하고 [계산하기]를 누르면 하단 결과 영역에 산출됩니다.</div>
     <div class="buttons"><button onclick="addIngredientManual()">직접 원료 추가</button><button class="secondary" onclick="saveLocal()">로컬 저장</button><button class="secondary" onclick="loadLocal()">불러오기</button></div>
     <div style="overflow:auto;margin-top:12px"><table id="ingredientTable"></table></div>
   </section>
@@ -146,7 +152,7 @@ function renderRecipe(){
   updateRecipeSum();
 }
 function updateRecipeSum(){ const s=recipe.reduce((a,b)=>a+(+b.percent||0),0); document.getElementById('recipeSum').innerHTML=`배합비 합계: <b>${round(s,2)}%</b>`; }
-function renderAll(){ renderIngredients(); renderRecipe(); }
+function renderAll(){ renderIngredients(); renderRecipe(); persistMaster(); }
 
 checkServer();
 function setActiveTab(key){
@@ -206,7 +212,46 @@ function copyText(id){ navigator.clipboard.writeText(document.getElementById(id)
 function saveLocal(){ localStorage.setItem('nutritionStudio', JSON.stringify({ingredients,recipe})); alert('저장했습니다.'); }
 function loadLocal(){ const d=JSON.parse(localStorage.getItem('nutritionStudio')||'null'); if(d){ingredients=d.ingredients||ingredients; recipe=d.recipe||recipe; renderAll(); alert('불러왔습니다.');} }
 
-seedIngredients(); loadPreset('strawberry'); renderAll(); calculate();
+// ── [B] 원료 마스터 영속화 (전용 키, 수동 저장 'nutritionStudio'와 분리) ──
+function persistMaster(){ try{ localStorage.setItem('masterIngredients', JSON.stringify(ingredients)); }catch(e){} }
+function loadMaster(){ try{ const d=JSON.parse(localStorage.getItem('masterIngredients')||'null'); if(Array.isArray(d)&&d.length){ ingredients=d; } }catch(e){} }
+function attachMasterAutosave(){ const t=document.getElementById('ingredientTable'); if(t) t.addEventListener('change', persistMaster); }
+
+// ── [A] 제품 저장/불러오기 "내 제품" ──
+function getSavedProducts(){ try{ return JSON.parse(localStorage.getItem('savedProducts')||'{}')||{}; }catch(e){ return {}; } }
+function saveProduct(){
+  const name=document.getElementById('productName').value.trim();
+  if(!name){ alert('제품명을 입력하면 저장할 수 있습니다.'); return; }
+  const data=getSavedProducts();
+  data[name]={ name, amount:document.getElementById('totalAmount').value, foodType:document.getElementById('foodType').value, yield:(+document.getElementById('yieldRate').value||100), recipe:recipe.map(r=>({name:r.name,percent:r.percent})) };
+  localStorage.setItem('savedProducts', JSON.stringify(data));
+  renderSavedProducts(); setActiveTab('saved:'+name);
+  alert(`'${name}' 제품을 저장했습니다.`);
+}
+function renderSavedProducts(){
+  const data=getSavedProducts(); const names=Object.keys(data); const wrap=document.getElementById('savedWrap');
+  if(!wrap) return;
+  if(!names.length){ wrap.innerHTML=''; return; }
+  const items=names.map(n=>`<span class="saved-item"><button class="secondary preset-tab" data-preset="saved:${escapeHtml(n)}" onclick='loadSavedProduct(${JSON.stringify(n).replace(/'/g,"&#39;")})'>${escapeHtml(n)}</button><button class="saved-del" title="삭제" onclick='deleteSavedProduct(${JSON.stringify(n).replace(/'/g,"&#39;")})'>×</button></span>`).join('');
+  wrap.innerHTML=`<div class="small" style="margin-bottom:6px">내 제품</div><div class="buttons" style="margin-top:0">${items}</div>`;
+}
+function loadSavedProduct(name){
+  const p=getSavedProducts()[name]; if(!p) return;
+  document.getElementById('productName').value=p.name||name;
+  document.getElementById('totalAmount').value=p.amount||'';
+  document.getElementById('foodType').value=p.foodType||'';
+  document.getElementById('yieldRate').value=(p.yield!=null?p.yield:100);
+  recipe=(p.recipe||[]).map(r=>({name:r.name,percent:r.percent}));
+  renderRecipe(); calculate(); setActiveTab('saved:'+name);
+}
+function deleteSavedProduct(name){
+  if(!confirm(`'${name}' 저장 제품을 삭제할까요?`)) return;
+  const data=getSavedProducts(); delete data[name];
+  localStorage.setItem('savedProducts', JSON.stringify(data));
+  renderSavedProducts();
+}
+
+seedIngredients(); loadMaster(); loadPreset('strawberry'); renderSavedProducts(); renderAll(); calculate(); attachMasterAutosave();
 </script>
 </body>
 </html>

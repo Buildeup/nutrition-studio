@@ -144,8 +144,20 @@ const RAW_REF = {
   '냉동딸기': {kcal:32, carb:7.7, sugar:4.9, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:0.7, sodium:1, source:'식품영양성분DB (원물 기준)'},
   '레몬': {kcal:29, carb:9.3, sugar:2.5, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:1.1, sodium:2, source:'식품영양성분DB (원물 기준)'},
   '오렌지': {kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB (원물 기준)'},
-  '자몽': {kcal:42, carb:10.7, sugar:6.9, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.8, sodium:0, source:'식품영양성분DB (원물 기준)'}
+  '자몽': {kcal:32, carb:7.92, sugar:4.20, fat:0.05, transFat:0, satFat:0.01, cholesterol:0, protein:0.84, sodium:1, foodCd:'R108-084000001-0000', source:'식품영양성분DB·농진청 (원물 기준)'},
+  '생강': {kcal:42, carb:9.82, sugar:0.45, fat:0.15, transFat:0, satFat:0.06, cholesterol:0, protein:0.97, sodium:4, foodCd:'R106-101002501-0000', source:'식품영양성분DB·농진청 (원물 기준)'}
 };
+const RAW_ALIAS = { '생자몽':'자몽', '냉동자몽':'자몽' };
+function rawRefFor(name){ const n=String(name||'').trim(); return RAW_REF[n] || RAW_REF[RAW_ALIAS[n]] || null; }
+function applyRawRefByName(i){
+  const row=bom[i]; if(!row) return;
+  const ref=rawRefFor(row.name);
+  if(ref && rowEmptyNutri(row)){
+    Object.assign(row, { kcal:ref.kcal, carb:ref.carb, sugar:ref.sugar, fat:ref.fat, transFat:ref.transFat, satFat:ref.satFat, cholesterol:ref.cholesterol, protein:ref.protein, sodium:ref.sodium, source:ref.source||'', foodCd:ref.foodCd||'', lookedUpAt:'' });
+    renderBom();
+  }
+  calculate();
+}
 function emptyNutri(){ return {kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0}; }
 
 function round(n, d=0){ const p=Math.pow(10,d); return Math.round((Number(n)||0)*p)/p; }
@@ -240,7 +252,7 @@ function lookupRowHtml(i){
 
 function renderBom(){
   const rows = bom.map((it,i)=>`<tr>
-    <td><div class="name-cell"><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;calculate()"><button class="btn-sm ${needsLookup(it)?'btn-attn':'secondary'}" onclick="lookupRow(${i})">조회</button>${needsLookup(it)?'<span class="chip-empty">값 없음 · 조회 필요</span>':''}</div></td>
+    <td><div class="name-cell"><input value="${escapeHtml(it.name)}" onchange="bom[${i}].name=this.value;applyRawRefByName(${i})"><button class="btn-sm ${needsLookup(it)?'btn-attn':'secondary'}" onclick="lookupRow(${i})">조회</button>${needsLookup(it)?'<span class="chip-empty">값 없음 · 조회 필요</span>':''}</div></td>
     <td class="num"><input type="number" value="${it.percent}" step="0.01" onchange="bom[${i}].percent=+this.value;updateBomSum();calculate()"></td>
     <td class="num"><input type="number" value="${round(it.kcal,2)}" onchange="bom[${i}].kcal=+this.value;calculate()"></td>
     <td class="num"><input type="number" value="${round(it.carb,2)}" onchange="bom[${i}].carb=+this.value;calculate()"></td>

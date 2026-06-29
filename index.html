@@ -46,6 +46,7 @@
     .btn-attn{box-shadow:0 0 0 2px rgba(155,95,47,.28)}
     .src-badge{display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap}
     .src-api{background:#edf8f2;color:#1d7a55}
+    .src-raw{background:#eef2fb;color:#3a5a9b}
     .src-manual{background:#efe7dc;color:#7a6a52}
     .src-unverified{background:#fff8e5;color:#8a6d1a}
     .lookup-row td{background:#faf6ef;padding:10px}
@@ -129,12 +130,12 @@ const SEED = {
   '자일로스설탕': {kcal:400, carb:100, sugar:100, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'원료사 규격서/성분표 필요'},
   '비타민C/소브산칼륨': {kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'미량 원료. 원료사 규격서 보관'}
 };
-// 과일 시드 자동 조회 검색어(우선어 → 폴백어). 변종 선택은 pickVariant(생것/저kcal 우선).
-const AUTO_QUERY = {
-  '냉동딸기': ['냉동딸기','딸기'],
-  '레몬': ['레몬 생것','레몬'],
-  '오렌지': ['오렌지 생것','오렌지'],
-  '자몽': ['자몽 생것','자몽']
+// 과일 원물 표준값(식약처 식품영양성분DB, 100g당) — 로드 시 정확값 즉시 채움. 가공품 자동조회 안 함.
+const RAW_REF = {
+  '냉동딸기': {kcal:32, carb:7.7, sugar:4.9, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:0.7, sodium:1, source:'식품영양성분DB (원물 기준)'},
+  '레몬': {kcal:29, carb:9.3, sugar:2.5, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:1.1, sodium:2, source:'식품영양성분DB (원물 기준)'},
+  '오렌지': {kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB (원물 기준)'},
+  '자몽': {kcal:42, carb:10.7, sugar:6.9, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.8, sodium:0, source:'식품영양성분DB (원물 기준)'}
 };
 function emptyNutri(){ return {kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0}; }
 
@@ -168,44 +169,17 @@ function needsLookup(it){ return (+it.percent>0) && rowEmptyNutri(it); }
 function sourceStatus(it){
   const s=String(it.source||'').trim();
   if(/Open\s*API|공공데이터/i.test(s)) return 'api';
+  if(/원물\s*기준/.test(s)) return 'raw';
   if(s) return 'manual';
   return rowEmptyNutri(it) ? '' : 'unverified';
 }
 function sourceBadge(it){
   const st=sourceStatus(it);
   if(st==='api') return `<span class="src-badge src-api">✅ API 확인됨</span>`;
+  if(st==='raw') return `<span class="src-badge src-raw">📚 원물 기준</span>`;
   if(st==='manual') return `<span class="src-badge src-manual">✏️ 직접입력</span>`;
   if(st==='unverified') return `<span class="src-badge src-unverified">⚠ 확인 필요</span>`;
   return '';
-}
-function pickVariant(rows){
-  // (a) 가공식품 아닌 것(생것/원물) 우선, (b) 여럿이면 kcal 최저. 영양값 없는 행은 제외.
-  const usable = rows.filter(x=>(+x.kcal||0)>0 || (+x.carbohydrate||0)>0 || (+x.protein||0)>0 || (+x.fat||0)>0);
-  const base = usable.length ? usable : rows;
-  const fresh = base.filter(x=>!/가공식품/.test(String(x.foodType||'')));
-  const pool = fresh.length ? fresh : base;
-  return pool.slice().sort((a,b)=>(+a.kcal||0)-(+b.kcal||0))[0] || null;
-}
-function autofillSeeds(){
-  bom.forEach(row=>{ if(AUTO_QUERY[row.name] && rowEmptyNutri(row)) autofillOne(row, AUTO_QUERY[row.name]); });
-}
-async function autofillOne(row, queries){
-  for(const q of queries){
-    try{
-      const endpoint=document.getElementById('endpoint').value.trim();
-      const r=await fetch(`/api/search-ingredient?q=${encodeURIComponent(q)}&endpoint=${encodeURIComponent(endpoint)}`);
-      if(!r.ok) continue;
-      const j=await r.json();
-      const rows=j.rows||[];
-      if(!rows.length) continue;
-      const pick=pickVariant(rows);
-      if(!pick) continue;
-      if(!rowEmptyNutri(row)) return;
-      Object.assign(row, { kcal:pick.kcal, carb:pick.carbohydrate, sugar:pick.sugars, fat:pick.fat, satFat:pick.saturatedFat, transFat:pick.transFat, cholesterol:pick.cholesterol, protein:pick.protein, sodium:pick.sodium, source:buildApiSource(pick) });
-      renderBom(); calculate();
-      return;
-    }catch(e){ /* 다음 검색어 시도, 끝까지 실패하면 빈 값(조회 필요 플래그) 유지 */ }
-  }
 }
 function renderEmptyNutriHint(){
   const el=document.getElementById('emptyNutriHint'); if(!el) return;
@@ -276,7 +250,7 @@ checkServer();
 function setActiveTab(key){
   document.querySelectorAll('.preset-tab').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
 }
-function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const s=SEED[name]||{}; return {name, percent, ...emptyNutri(), ...s, source:(s.source||'')}; }); renderBom(); calculate(); setActiveTab(key); autofillSeeds(); }
+function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const ref=RAW_REF[name]||SEED[name]||{}; return {name, percent, ...emptyNutri(), ...ref, source:(ref.source||'')}; }); renderBom(); calculate(); setActiveTab(key); }
 function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; renderResultSummary(); setActiveTab('new'); }
 function addBomRow(){ bom.push({name:'새 원료', percent:0, ...emptyNutri(), source:'직접입력'}); renderBom(); calculate(); }
 
@@ -373,7 +347,7 @@ function loadSavedProduct(name){
   document.getElementById('totalAmount').value=p.amount||'';
   document.getElementById('foodType').value=p.foodType||'';
   document.getElementById('yieldRate').value=(p.yield!=null?p.yield:100);
-  bom=(p.bom || (p.recipe||[]).map(r=>{ const s=SEED[r.name]||{}; return {name:r.name, percent:r.percent, ...emptyNutri(), ...s, source:(s.source||'')}; })).map(r=>({...r}));
+  bom=(p.bom || (p.recipe||[]).map(r=>{ const s=RAW_REF[r.name]||SEED[r.name]||{}; return {name:r.name, percent:r.percent, ...emptyNutri(), ...s, source:(s.source||'')}; })).map(r=>({...r}));
   renderBom(); calculate(); setActiveTab('saved:'+name);
 }
 function deleteSavedProduct(name){

@@ -10,12 +10,15 @@ npm install
 cp .env.example .env
 ```
 
-`.env` 파일을 열고 공공데이터포털에서 받은 **Encoding 인증키**를 넣습니다.
+`.env` 파일을 열고 공공데이터포털에서 복사한 **End Point**와 **일반 인증키**를 붙여넣습니다.
 
 ```env
-DATA_GO_KR_SERVICE_KEY=발급받은_Encoding_인증키
+DATA_GO_KR_API_ENDPOINT=https://api.data.go.kr/openapi/...
+DATA_GO_KR_SERVICE_KEY=일반_인증키
 PORT=5174
 ```
+
+일반 인증키(Decoding Key)를 사용하세요. Encoding 인증키는 URL 인코딩된 값이라 이 프로젝트에서는 사용하지 않습니다.
 
 ## 2. 실행
 
@@ -43,4 +46,4 @@ http://localhost:5174
 정적 웹(index.html) -> 백엔드(server.js) -> 공공데이터포털 API
 ```
 
-Vercel/Render/Railway/Fly.io 등에 서버를 배포하고, 환경변수에 `DATA_GO_KR_SERVICE_KEY`를 등록하면 됩니다.
+Vercel/Render/Railway/Fly.io 등에 서버를 배포하고, 환경변수에 `DATA_GO_KR_API_ENDPOINT`와 `DATA_GO_KR_SERVICE_KEY`를 등록하면 됩니다.

@@ -11,6 +11,8 @@
     main{max-width:1200px;margin:0 auto;padding:24px;display:grid;gap:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(30,20,10,.04)}
     h2{font-size:18px;margin:0 0 14px}.row{display:grid;grid-template-columns:160px 1fr;gap:10px;align-items:center;margin:9px 0}label{font-weight:700;font-size:14px}input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:white;font-size:14px}textarea{min-height:90px}
     button{border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;background:var(--accent);color:white}button.secondary{background:#efe7dc;color:var(--ink)}button.green{background:var(--accent2)}button.danger{background:#b54b43}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    button{transition:background .15s ease,color .15s ease,box-shadow .15s ease}
+    .preset-tab.active{background:var(--accent);color:#fff;box-shadow:0 0 0 2px rgba(155,95,47,.25)}
     table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:9px;text-align:left;vertical-align:middle}th{color:var(--muted);font-size:12px} .small{font-size:12px;color:var(--muted)} .pill{display:inline-block;padding:4px 8px;border-radius:99px;background:#efe7dc;font-size:12px;color:#5f5147}.result{white-space:pre-wrap;background:white;border:1px solid var(--line);border-radius:12px;padding:14px;line-height:1.55}.full{grid-column:1/-1}.right{text-align:right}.warn{background:#fff8e5;border:1px solid #edd9a5;border-radius:12px;padding:12px;color:#614b16}.ok{background:#edf8f2;border:1px solid #bfe1cf;color:#214d39;border-radius:12px;padding:12px}
     @media(max-width:860px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
   </style>
@@ -30,11 +32,11 @@
       <div class="row"><label>완제품 수율</label><input id="yieldRate" type="number" value="100" min="1" step="0.1"></div>
       <div class="small">수율 100% = 표시 배합비를 완제품 100g 기준으로 계산. 수율 95%면 영양성분이 농축되어 보정됩니다.</div>
       <div class="buttons">
-        <button class="secondary" onclick="loadPreset('strawberry')">딸기청</button>
-        <button class="secondary" onclick="loadPreset('lemon')">레몬청</button>
-        <button class="secondary" onclick="loadPreset('orange')">오렌지청</button>
-        <button class="secondary" onclick="loadPreset('grapefruit')">자몽청</button>
-        <button onclick="newProduct()">새 제품</button>
+        <button class="secondary preset-tab" data-preset="strawberry" onclick="loadPreset('strawberry')">딸기청</button>
+        <button class="secondary preset-tab" data-preset="lemon" onclick="loadPreset('lemon')">레몬청</button>
+        <button class="secondary preset-tab" data-preset="orange" onclick="loadPreset('orange')">오렌지청</button>
+        <button class="secondary preset-tab" data-preset="grapefruit" onclick="loadPreset('grapefruit')">자몽청</button>
+        <button class="secondary preset-tab" data-preset="new" onclick="newProduct()">새 제품</button>
       </div>
     </section>
 
@@ -125,8 +127,11 @@ function updateRecipeSum(){ const s=recipe.reduce((a,b)=>a+(+b.percent||0),0); d
 function renderAll(){ renderIngredients(); renderRecipe(); }
 
 checkServer();
-function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; recipe=p.recipe.map(([name,percent])=>({name,percent})); renderRecipe(); calculate(); }
-function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; recipe=[]; renderRecipe(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; }
+function setActiveTab(key){
+  document.querySelectorAll('.preset-tab').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
+}
+function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; recipe=p.recipe.map(([name,percent])=>({name,percent})); renderRecipe(); calculate(); setActiveTab(key); }
+function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; recipe=[]; renderRecipe(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; setActiveTab('new'); }
 function addIngredientManual(){ ingredients.push({name:'새 원료',kcal:0,carb:0,sugar:0,fat:0,transFat:0,satFat:0,cholesterol:0,protein:0,sodium:0,source:'직접입력'}); renderAll(); }
 function addRecipeRow(){ recipe.push({name:ingredients[0]?.name||'',percent:0}); renderRecipe(); }
 

@@ -47,10 +47,10 @@ function normalizeRows(payload) {
     ]) || '').trim();
 
     // 대표식품명만 반복되는 데이터(예: '딸기')를 구분할 보조 정보.
-    const foodType = cleanLabel(pick(row, ['typeNm', 'TYPE_NM', '식품유형']));
-    const maker = cleanLabel(pick(row, ['mkrNm', 'companyNm', 'rtlBzentyNm', 'MKR_NM', '제조사명', '업체명', '유통업체명']));
+    const foodType = cleanLabel(pick(row, ['typeNm', 'TYPE_NM', '식품유형', 'DB_GRP_NM']));
+    const maker = cleanLabel(pick(row, ['mkrNm', 'companyNm', 'rtlBzentyNm', 'MKR_NM', '제조사명', '업체명', '유통업체명', 'MAKER_NM']));
     const foodSize = cleanLabel(pick(row, ['foodSize', 'FOOD_SIZE', '식품중량']));
-    const origin = cleanLabel(pick(row, ['cooNm', 'COO_NM', '원산지국명', '원산지']));
+    const origin = cleanLabel(pick(row, ['cooNm', 'COO_NM', '원산지국명', '원산지', 'NATION_NM']));
 
     // 식품명 옆에 분류/업체명/중량/원산지를 덧붙여 가공품·생것을 구분 가능하게 표시.
     const detailParts = [foodType, maker, foodSize, origin].filter((v) => v && v !== baseName);
@@ -66,17 +66,17 @@ function normalizeRows(payload) {
       foodSize,
       origin,
       servingSize: parseServingSize(pick(row, ['SERVING_SIZE', 'servingSize', 'SERVING_WT', 'nutConSrtrQua', '영양성분함량기준량']) || 100) || 100,
-      kcal: toNumber(pick(row, ['NUTR_CONT1', 'enerc', 'ENERC_KCAL', 'energy', '에너지(kcal)', '에너지'])),
-      carbohydrate: toNumber(pick(row, ['NUTR_CONT2', 'chocdf', 'CHOCDF', 'carbohydrate', '탄수화물(g)', '탄수화물'])),
-      protein: toNumber(pick(row, ['NUTR_CONT3', 'prot', 'PROT', 'protein', '단백질(g)', '단백질'])),
-      fat: toNumber(pick(row, ['NUTR_CONT4', 'fatce', 'FATCE', 'fat', '지방(g)', '지방'])),
-      sugars: toNumber(pick(row, ['NUTR_CONT5', 'sugar', 'SUGAR', 'sugars', '당류(g)', '당류'])),
-      sodium: toNumber(pick(row, ['NUTR_CONT6', 'nat', 'NAT', 'sodium', '나트륨(mg)', '나트륨'])),
-      cholesterol: toNumber(pick(row, ['NUTR_CONT7', 'chole', 'CHOLE', 'cholesterol', '콜레스테롤(mg)', '콜레스테롤'])),
-      saturatedFat: toNumber(pick(row, ['NUTR_CONT8', 'fasat', 'FASAT', 'saturatedFat', '포화지방산(g)', '포화지방'])),
-      transFat: toNumber(pick(row, ['NUTR_CONT9', 'fatrn', 'FATRN', 'transFat', '트랜스지방산(g)', '트랜스지방'])),
+      kcal: toNumber(pick(row, ['NUTR_CONT1', 'enerc', 'ENERC_KCAL', 'energy', '에너지(kcal)', '에너지', 'AMT_NUM1'])),
+      carbohydrate: toNumber(pick(row, ['NUTR_CONT2', 'chocdf', 'CHOCDF', 'carbohydrate', '탄수화물(g)', '탄수화물', 'AMT_NUM6'])),
+      protein: toNumber(pick(row, ['NUTR_CONT3', 'prot', 'PROT', 'protein', '단백질(g)', '단백질', 'AMT_NUM3'])),
+      fat: toNumber(pick(row, ['NUTR_CONT4', 'fatce', 'FATCE', 'fat', '지방(g)', '지방', 'AMT_NUM4'])),
+      sugars: toNumber(pick(row, ['NUTR_CONT5', 'sugar', 'SUGAR', 'sugars', '당류(g)', '당류', 'AMT_NUM7'])),
+      sodium: toNumber(pick(row, ['NUTR_CONT6', 'nat', 'NAT', 'sodium', '나트륨(mg)', '나트륨', 'AMT_NUM13'])),
+      cholesterol: toNumber(pick(row, ['NUTR_CONT7', 'chole', 'CHOLE', 'cholesterol', '콜레스테롤(mg)', '콜레스테롤', 'AMT_NUM23'])),
+      saturatedFat: toNumber(pick(row, ['NUTR_CONT8', 'fasat', 'FASAT', 'saturatedFat', '포화지방산(g)', '포화지방', 'AMT_NUM24'])),
+      transFat: toNumber(pick(row, ['NUTR_CONT9', 'fatrn', 'FATRN', 'transFat', '트랜스지방산(g)', '트랜스지방', 'AMT_NUM25'])),
       source: [srcName || '공공데이터포털 식품영양정보 Open API', maker].filter(Boolean).join(' / '),
-      raw: row,
+      raw: { ...row, foodCd: row.FOOD_CD || row.foodCd || '' },
     };
   }).filter((r) => r.baseName);
 }
@@ -157,7 +157,7 @@ app.get('/api/search-ingredient', async (req, res) => {
     const query = String(req.query.q || '').trim();
     const endpoint = String(req.query.endpoint || API_ENDPOINT || DEFAULT_ENDPOINT).trim();
     const pageNo = String(req.query.pageNo || '1');
-    const numOfRows = String(req.query.numOfRows || '20');
+    const numOfRows = String(req.query.numOfRows || '50');
     const debug = req.query.debug !== undefined && !['0', 'false', ''].includes(String(req.query.debug));
 
     if (!query) return res.status(400).json({ error: '검색어 q가 필요합니다.' });
@@ -202,6 +202,14 @@ app.get('/api/search-ingredient', async (req, res) => {
     }
 
     const rows = normalizeRows(payload).map(per100);
+    // 원물 우선 정렬: 원재료성(0) → 가공식품(1) → 음식/그 외(2). stable sort로 동점 순서 유지.
+    const rawFoodRank = (r) => {
+      const g = String(r.foodType || (r.raw && r.raw.DB_GRP_NM) || '');
+      if (g.includes('원재료')) return 0;
+      if (g.includes('가공')) return 1;
+      return 2;
+    };
+    rows.sort((a, b) => rawFoodRank(a) - rawFoodRank(b));
     res.json({ ok: true, count: rows.length, rows, rawStatus: apiRes.status });
   } catch (error) {
     res.status(500).json({ error: 'API 조회 실패', message: error.message });

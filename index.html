@@ -288,8 +288,9 @@ checkServer();
 function setActiveTab(key){
   document.querySelectorAll('.preset-tab').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
 }
-function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const ref=RAW_REF[name]||SEED[name]||{}; return {name, percent, ...emptyNutri(), ...ref, source:(ref.source||'')}; }); renderBom(); calculate(); setActiveTab(key); }
-function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; renderResultSummary(); setActiveTab('new'); }
+function setLastActive(type,key){ try{ localStorage.setItem('lastActive', JSON.stringify({type,key})); }catch(e){} }
+function loadPreset(key){ const p=presets[key]; document.getElementById('productName').value=p.name; document.getElementById('totalAmount').value=p.amount; document.getElementById('foodType').value=p.type; bom=p.recipe.map(([name,percent])=>{ const ref=RAW_REF[name]||SEED[name]||{}; return {name, percent, ...emptyNutri(), ...ref, source:(ref.source||'')}; }); renderBom(); calculate(); setActiveTab(key); setLastActive('preset', key); }
+function newProduct(){ document.getElementById('productName').value=''; document.getElementById('totalAmount').value='1kg'; document.getElementById('foodType').value='액상차'; bom=[]; renderBom(); document.getElementById('labelText').textContent=''; document.getElementById('reportText').textContent=''; renderResultSummary(); setActiveTab('new'); setLastActive('new',''); }
 function addBomRow(){ bom.push({name:'새 원료', percent:0, ...emptyNutri(), source:'직접입력'}); renderBom(); calculate(); }
 
 async function checkServer(){
@@ -369,7 +370,7 @@ function saveProduct(){
   const data=getSavedProducts();
   data[name]={ name, amount:document.getElementById('totalAmount').value, foodType:document.getElementById('foodType').value, yield:(+document.getElementById('yieldRate').value||100), bom:bom.map(r=>({...r})) };
   localStorage.setItem('savedProducts', JSON.stringify(data));
-  renderSavedProducts(); setActiveTab('saved:'+name);
+  renderSavedProducts(); setActiveTab('saved:'+name); setLastActive('saved', name);
   alert(`'${name}' 제품을 저장했습니다.`);
 }
 function renderSavedProducts(){
@@ -386,12 +387,13 @@ function loadSavedProduct(name){
   document.getElementById('foodType').value=p.foodType||'';
   document.getElementById('yieldRate').value=(p.yield!=null?p.yield:100);
   bom=(p.bom || (p.recipe||[]).map(r=>{ const s=RAW_REF[r.name]||SEED[r.name]||{}; return {name:r.name, percent:r.percent, ...emptyNutri(), ...s, source:(s.source||'')}; })).map(r=>({...r}));
-  renderBom(); calculate(); setActiveTab('saved:'+name);
+  renderBom(); calculate(); setActiveTab('saved:'+name); setLastActive('saved', name);
 }
 function deleteSavedProduct(name){
   if(!confirm(`'${name}' 저장 제품을 삭제할까요?`)) return;
   const data=getSavedProducts(); delete data[name];
   localStorage.setItem('savedProducts', JSON.stringify(data));
+  try{ const la=JSON.parse(localStorage.getItem('lastActive')||'null'); if(la&&la.type==='saved'&&la.key===name){ localStorage.removeItem('lastActive'); } }catch(e){}
   renderSavedProducts();
 }
 
@@ -425,7 +427,16 @@ function deleteFromLibrary(i){
   lib.splice(i,1); setLibrary(lib); renderLibraryPanel();
 }
 
-loadPreset('strawberry'); renderSavedProducts();
+(function boot(){
+  renderSavedProducts();
+  let la=null; try{ la=JSON.parse(localStorage.getItem('lastActive')||'null'); }catch(e){}
+  if(la){
+    if(la.type==='saved' && getSavedProducts()[la.key]){ loadSavedProduct(la.key); return; }
+    if(la.type==='preset' && presets[la.key]){ loadPreset(la.key); return; }
+    if(la.type==='new'){ newProduct(); return; }
+  }
+  loadPreset('strawberry');
+})();
 </script>
 <div id="calcToast"></div>
 </body>

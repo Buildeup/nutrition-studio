@@ -52,6 +52,8 @@
     .src-raw{background:#eef2fb;color:#3a5a9b}
     .src-manual{background:#efe7dc;color:#7a6a52}
     .src-unverified{background:#fff8e5;color:#8a6d1a}
+    #calcToast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--accent2,#4a7c59);color:#fff;padding:11px 18px;border-radius:12px;font-weight:800;box-shadow:0 6px 20px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .2s;z-index:9999;max-width:90%;text-align:center}
+    #calcToast.show{opacity:1}
     #libPanel{border:1px solid var(--line);border-radius:12px;padding:12px;background:#faf6ef}
     .lib-list{display:flex;flex-wrap:wrap;gap:8px}
     .lib-item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;flex:1 1 240px;min-width:200px}
@@ -103,7 +105,7 @@
   <section class="card full">
     <h2>3. 원재료(BOM)</h2>
     <div class="small" style="margin:0 0 10px">원료와 배합비%를 넣으면(합계 100%) 아래 결과가 자동 산출됩니다.</div>
-    <div class="buttons"><button onclick="addBomRow()">원료 추가</button><button class="green" onclick="calculate()">계산하기</button><button class="secondary" style="margin-left:auto" onclick="saveToLibrary()">라이브러리에 저장</button><button class="secondary" onclick="toggleLibrary()">라이브러리에서 추가</button></div>
+    <div class="buttons"><button onclick="addBomRow()">원료 추가</button><button class="green" onclick="calculateAndNotify()">계산하기</button><button class="secondary" style="margin-left:auto" onclick="saveToLibrary()">라이브러리에 저장</button><button class="secondary" onclick="toggleLibrary()">라이브러리에서 추가</button></div>
     <div id="libPanel" style="display:none;margin-top:10px"></div>
     <div style="overflow:auto;margin-top:12px"><table id="bomTable"></table></div>
     <div id="bomSum" style="margin-top:10px"></div>
@@ -350,6 +352,8 @@ function renderResultSummary(v){
   el.innerHTML = cards.map(([label,val,unit,p])=>`<div class="rs-card"><div class="rs-label">${label}</div><div class="rs-val">${val}${unit?` <span class="rs-unit">${unit}</span>`:''}</div>${p!=null?`<div class="rs-pct">1일기준 ${p}%</div>`:''}</div>`).join('');
 }
 function copyText(id){ navigator.clipboard.writeText(document.getElementById(id).textContent); alert('복사했습니다.'); }
+function showCalcDone(msg){ const t=document.getElementById('calcToast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(window.__calcToast); window.__calcToast=setTimeout(()=>t.classList.remove('show'),2600); }
+function calculateAndNotify(){ calculate(); const empties = bom.filter(r=>(+r.percent>0) && !['kcal','carb','sugar','fat','protein','sodium'].some(k=>+r[k]>0)).length; showCalcDone(empties? `✅ 계산 완료 — 100g당 영양성분·라벨·근거서 갱신 (값 없음 원료 ${empties}개는 제외됨)` : '✅ 계산 완료 — 100g당 영양성분·라벨 문구·근거서가 갱신되었습니다'); }
 
 // ── [A] 제품 저장/불러오기 "내 제품" ──
 function getSavedProducts(){ try{ return JSON.parse(localStorage.getItem('savedProducts')||'{}')||{}; }catch(e){ return {}; } }
@@ -417,5 +421,6 @@ function deleteFromLibrary(i){
 
 loadPreset('strawberry'); renderSavedProducts();
 </script>
+<div id="calcToast"></div>
 </body>
 </html>

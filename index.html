@@ -145,7 +145,8 @@ const RAW_REF = {
   '레몬': {kcal:29, carb:9.3, sugar:2.5, fat:0.3, transFat:0, satFat:0, cholesterol:0, protein:1.1, sodium:2, source:'식품영양성분DB (원물 기준)'},
   '오렌지': {kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB (원물 기준)'},
   '자몽': {kcal:32, carb:7.92, sugar:4.20, fat:0.05, transFat:0, satFat:0.01, cholesterol:0, protein:0.84, sodium:1, foodCd:'R108-084000001-0000', source:'식품영양성분DB·농진청 (원물 기준)'},
-  '생강': {kcal:42, carb:9.82, sugar:0.45, fat:0.15, transFat:0, satFat:0.06, cholesterol:0, protein:0.97, sodium:4, foodCd:'R106-101002501-0000', source:'식품영양성분DB·농진청 (원물 기준)'}
+  '생강': {kcal:42, carb:9.82, sugar:0.45, fat:0.15, transFat:0, satFat:0.06, cholesterol:0, protein:0.97, sodium:4, foodCd:'R106-101002501-0000', source:'식품영양성분DB·농진청 (원물 기준)'},
+  '포도': {kcal:60, carb:15.73, sugar:13.74, fat:0.27, transFat:0, satFat:0.02, cholesterol:0, protein:0.40, sodium:1, foodCd:'R108-098010001-0000', source:'식품영양성분DB·농진청 (원물 기준 · 거봉)'}
 };
 const RAW_ALIAS = { '생자몽':'자몽', '냉동자몽':'자몽' };
 function rawRefFor(name){ const n=String(name||'').trim(); return RAW_REF[n] || RAW_REF[RAW_ALIAS[n]] || null; }

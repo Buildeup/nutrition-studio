@@ -50,6 +50,7 @@
     .src-badge{display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:99px;white-space:nowrap}
     .src-api{background:#edf8f2;color:#1d7a55}
     .src-raw{background:#eef2fb;color:#3a5a9b}
+    .src-additive{background:#e8edf2;color:#4b5d6e}
     .src-manual{background:#efe7dc;color:#7a6a52}
     .src-unverified{background:#fff8e5;color:#8a6d1a}
     #calcToast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--accent2,#4a7c59);color:#fff;padding:11px 18px;border-radius:12px;font-weight:800;box-shadow:0 6px 20px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .2s;z-index:9999;max-width:90%;text-align:center}
@@ -148,9 +149,12 @@ const RAW_REF = {
   '오렌지': {kcal:47, carb:11.8, sugar:9.4, fat:0.1, transFat:0, satFat:0, cholesterol:0, protein:0.9, sodium:0, source:'식품영양성분DB (원물 기준)'},
   '자몽': {kcal:32, carb:7.92, sugar:4.20, fat:0.05, transFat:0, satFat:0.01, cholesterol:0, protein:0.84, sodium:1, foodCd:'R108-084000001-0000', source:'식품영양성분DB·농진청 (원물 기준)'},
   '생강': {kcal:42, carb:9.82, sugar:0.45, fat:0.15, transFat:0, satFat:0.06, cholesterol:0, protein:0.97, sodium:4, foodCd:'R106-101002501-0000', source:'식품영양성분DB·농진청 (원물 기준)'},
-  '포도': {kcal:60, carb:15.73, sugar:13.74, fat:0.27, transFat:0, satFat:0.02, cholesterol:0, protein:0.40, sodium:1, foodCd:'R108-098010001-0000', source:'식품영양성분DB·농진청 (원물 기준 · 거봉)'}
+  '포도': {kcal:60, carb:15.73, sugar:13.74, fat:0.27, transFat:0, satFat:0.02, cholesterol:0, protein:0.40, sodium:1, foodCd:'R108-098010001-0000', source:'식품영양성분DB·농진청 (원물 기준 · 거봉)'},
+  '비타민C': {kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'식품첨가물 · 직접관리 (영양 기여 미미)'},
+  '소브산칼륨': {kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'식품첨가물 · 직접관리 (영양 기여 미미)'},
+  '구연산': {kcal:0, carb:0, sugar:0, fat:0, transFat:0, satFat:0, cholesterol:0, protein:0, sodium:0, source:'식품첨가물 · 직접관리 (영양 기여 미미)'}
 };
-const RAW_ALIAS = { '생자몽':'자몽', '냉동자몽':'자몽' };
+const RAW_ALIAS = { '생자몽':'자몽', '냉동자몽':'자몽', 'L-아스코르브산':'비타민C', '아스코르브산':'비타민C', '비타민씨':'비타민C', '소르빈산칼륨':'소브산칼륨' };
 function rawRefFor(name){ const n=String(name||'').trim(); return RAW_REF[n] || RAW_REF[RAW_ALIAS[n]] || null; }
 function applyRawRefByName(i){
   const row=bom[i]; if(!row) return;
@@ -197,10 +201,11 @@ function buildApiSource(x, meta){
   return base;
 }
 function rowEmptyNutri(it){ return ['kcal','carb','sugar','fat','protein','sodium','satFat','transFat','cholesterol'].every(k=>!(+it[k])); }
-function needsLookup(it){ return (+it.percent>0) && rowEmptyNutri(it); }
+function needsLookup(it){ return (+it.percent>0) && rowEmptyNutri(it) && !/첨가물/.test(String(it.source||'')); }
 function sourceStatus(it){
   const s=String(it.source||'').trim();
   if(/Open\s*API|공공데이터/i.test(s)) return 'api';
+  if(/첨가물/.test(s)) return 'additive';
   if(/원물\s*기준/.test(s)) return 'raw';
   if(s) return 'manual';
   return rowEmptyNutri(it) ? '' : 'unverified';
@@ -208,6 +213,7 @@ function sourceStatus(it){
 function sourceBadge(it){
   const st=sourceStatus(it);
   if(st==='api') return `<span class="src-badge src-api">✅ API 확인됨</span>`;
+  if(st==='additive') return `<span class="src-badge src-additive">🧪 첨가물</span>`;
   if(st==='raw') return `<span class="src-badge src-raw">📚 원물 기준</span>`;
   if(st==='manual') return `<span class="src-badge src-manual">✏️ 직접입력</span>`;
   if(st==='unverified') return `<span class="src-badge src-unverified">⚠ 확인 필요</span>`;
@@ -353,7 +359,7 @@ function renderResultSummary(v){
 }
 function copyText(id){ navigator.clipboard.writeText(document.getElementById(id).textContent); alert('복사했습니다.'); }
 function showCalcDone(msg){ const t=document.getElementById('calcToast'); if(!t) return; t.textContent=msg; t.classList.add('show'); clearTimeout(window.__calcToast); window.__calcToast=setTimeout(()=>t.classList.remove('show'),2600); }
-function calculateAndNotify(){ calculate(); const empties = bom.filter(r=>(+r.percent>0) && !['kcal','carb','sugar','fat','protein','sodium'].some(k=>+r[k]>0)).length; showCalcDone(empties? `✅ 계산 완료 — 100g당 영양성분·라벨·근거서 갱신 (값 없음 원료 ${empties}개는 제외됨)` : '✅ 계산 완료 — 100g당 영양성분·라벨 문구·근거서가 갱신되었습니다'); }
+function calculateAndNotify(){ calculate(); const empties = bom.filter(r=>(+r.percent>0) && !['kcal','carb','sugar','fat','protein','sodium'].some(k=>+r[k]>0) && !/첨가물/.test(String(r.source||''))).length; showCalcDone(empties? `✅ 계산 완료 — 100g당 영양성분·라벨·근거서 갱신 (값 없음 원료 ${empties}개는 제외됨)` : '✅ 계산 완료 — 100g당 영양성분·라벨 문구·근거서가 갱신되었습니다'); }
 
 // ── [A] 제품 저장/불러오기 "내 제품" ──
 function getSavedProducts(){ try{ return JSON.parse(localStorage.getItem('savedProducts')||'{}')||{}; }catch(e){ return {}; } }
